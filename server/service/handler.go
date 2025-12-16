@@ -1037,8 +1037,13 @@ func attachFleetAPIRoutes(r *mux.Router, svc fleet.Service, config config.FleetC
 	// endpoint but a raw http.Handler. It uses the NoAuthEndpointer because
 	// authentication is done when the websocket session is established, inside
 	// the handler.
-	ne.UsePathPrefix().PathHandler("GET", "/api/_version_/fleet/results/",
-		makeStreamDistributedQueryCampaignResultsHandler(config.Server, svc, logger))
+	//
+	// We register both GET (for HTTP/1.1 WebSocket upgrade) and CONNECT (for
+	// HTTP/2 extended CONNECT per RFC 8441) methods. The http2websocket middleware
+	// adapts HTTP/2 requests to work with sockjs-go/gorilla.
+	resultsHandler := makeStreamDistributedQueryCampaignResultsHandler(config.Server, svc, logger)
+	ne.UsePathPrefix().PathHandler("GET", "/api/_version_/fleet/results/", resultsHandler)
+	ne.UsePathPrefix().PathHandler("CONNECT", "/api/_version_/fleet/results/", resultsHandler)
 
 	quota := throttled.RateQuota{MaxRate: throttled.PerHour(10), MaxBurst: forgotPasswordRateLimitMaxBurst}
 	limiter := ratelimit.NewMiddleware(limitStore)

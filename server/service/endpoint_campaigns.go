@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/fleetdm/fleet/v4/server/config"
+	"github.com/fleetdm/fleet/v4/server/service/http2websocketadapter"
 	"github.com/fleetdm/fleet/v4/server/service/middleware/auth"
 
 	"github.com/fleetdm/fleet/v4/server/contexts/viewer"
@@ -37,7 +38,8 @@ func makeStreamDistributedQueryCampaignResultsHandler(config config.ServerConfig
 		opt.WebsocketUpgrader = &gws.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
-			}}
+			},
+		}
 	}
 
 	return func(path string) http.Handler {
@@ -122,6 +124,13 @@ func makeStreamDistributedQueryCampaignResultsHandler(config config.ServerConfig
 			// needs it in order to match it as a path prefix (subtree).
 			sockPath := strings.TrimSuffix(lp, "/")
 			mux.Handle(lp, sockjs.NewHandler(sockPath, opt, sockHandler))
+		}
+
+		// When ForceH2C is enabled, wrap with HTTP/2 WebSocket adapter middleware
+		// to support RFC 8441 extended CONNECT. This translates HTTP/2 WebSocket
+		// requests to work with sockjs-go/gorilla which expect HTTP/1.1.
+		if config.ForceH2C {
+			return http2websocketadapter.Middleware(mux)
 		}
 		return mux
 	}
